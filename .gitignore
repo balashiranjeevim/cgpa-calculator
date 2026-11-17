@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Production build outputs
+dist/
+*/dist/
+.angular/
+
+# Environment files with sensitive credentials
+.env
+backend/.env
+!backend/.env.example
+
+# Logs and runtime caches
+*.log
+npm-debug.log*
+.DS_Store

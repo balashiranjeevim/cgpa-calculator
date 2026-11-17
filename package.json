@@ -1,0 +1,27 @@
+{
+  "name": "cgpa-calculator-root",
+  "version": "1.0.0",
+  "description": "Full-Stack CGPA Calculator Web Application (Angular, Express, MySQL)",
+  "scripts": {
+    "install:all": "npm install --prefix backend && npm install --prefix frontend",
+    "build:backend": "npm run build --prefix backend",
+    "build:frontend": "npm run build --prefix frontend",
+    "build": "npm run build:backend && npm run build:frontend",
+    "start:backend": "npm run start --prefix backend",
+    "start:frontend": "npm run start --prefix frontend",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:frontend": "npm run start --prefix frontend",
+    "migrate": "npm run migrate --prefix backend"
+  },
+  "keywords": [
+    "cgpa",
+    "sgpa",
+    "calculator",
+    "angular",
+    "express",
+    "mysql",
+    "typescript"
+  ],
+  "author": "",
+  "license": "ISC"
+}
