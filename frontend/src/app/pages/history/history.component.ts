@@ -15,8 +15,8 @@ import { ConfirmModalComponent } from '../../components/confirm-modal/confirm-mo
     <div class="history-page">
       <div class="page-header mb-6">
         <div>
-          <h1 class="page-title">Saved Semesters</h1>
-          <p class="text-muted text-sm">Historical archive of semesters stored in MySQL.</p>
+          <h1 class="page-title">Saved Semesters History</h1>
+          <p class="text-muted text-sm">Historical archive of semester calculations stored in MySQL.</p>
         </div>
 
         <div class="header-actions">
@@ -26,39 +26,79 @@ import { ConfirmModalComponent } from '../../components/confirm-modal/confirm-mo
         </div>
       </div>
 
-      <!-- Search & Sort Filter -->
+      <!-- Search, Classification & Sort Filter Bar -->
       <div class="card mb-6 filter-card">
         <div class="filter-controls">
-          <input 
-            type="text" 
-            class="form-input search-input" 
-            placeholder="Search by semester heading or number..." 
-            [(ngModel)]="searchQuery"
-            (input)="applyFilters()"
-          />
+          <div class="search-box">
+            <input 
+              type="text" 
+              class="form-input search-input" 
+              placeholder="Search by heading, semester number, or grade..." 
+              [(ngModel)]="searchQuery"
+              (ngModelChange)="applyFilters()"
+            />
+          </div>
 
-          <select class="form-select sort-select" [(ngModel)]="sortBy" (change)="applyFilters()">
-            <option value="sem_asc">Semester (1 &rarr; N)</option>
-            <option value="sem_desc">Semester (N &rarr; 1)</option>
-            <option value="sgpa_desc">Highest SGPA</option>
-            <option value="sgpa_asc">Lowest SGPA</option>
-            <option value="credits_desc">Most Credits</option>
-          </select>
+          <div class="filter-selects">
+            <select class="form-select filter-standing-select" [(ngModel)]="filterStanding" (ngModelChange)="applyFilters()">
+              <option value="all">All Classifications</option>
+              <option value="distinction">Distinction (&ge; 8.5)</option>
+              <option value="first">First Class (&ge; 6.5)</option>
+              <option value="second">Second Class (&ge; 5.5)</option>
+              <option value="pass">Pass Class (&ge; 4.0)</option>
+              <option value="fail">Fail (&lt; 4.0)</option>
+            </select>
+
+            <select class="form-select sort-select" [(ngModel)]="sortBy" (ngModelChange)="applyFilters()">
+              <option value="sem_asc">Semester (1 &rarr; N)</option>
+              <option value="sem_desc">Semester (N &rarr; 1)</option>
+              <option value="sgpa_desc">Highest SGPA</option>
+              <option value="sgpa_asc">Lowest SGPA</option>
+              <option value="credits_desc">Most Credits</option>
+              <option value="credits_asc">Least Credits</option>
+              <option value="date_desc">Newest First</option>
+              <option value="date_asc">Oldest First</option>
+            </select>
+
+            <button 
+              *ngIf="searchQuery || filterStanding !== 'all' || sortBy !== 'sem_asc'" 
+              class="btn btn-outline btn-sm reset-btn" 
+              (click)="resetFilters()"
+              title="Reset all filters"
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+
+        <div class="filter-status-bar" *ngIf="!loading && semesters.length > 0">
+          <span class="text-xs text-muted">
+            Showing {{ filteredSemesters.length }} of {{ semesters.length }} semester records
+          </span>
         </div>
       </div>
 
       <!-- Loading State -->
       <div *ngIf="loading" class="loading-box">
         <div class="spinner spinner-primary"></div>
-        <span class="text-muted text-sm">Loading records...</span>
+        <span class="text-muted text-sm">Loading records from database...</span>
       </div>
 
-      <!-- Empty State -->
-      <div *ngIf="!loading && filteredSemesters.length === 0" class="empty-state">
-        <h4 class="empty-state-title">No matching semesters found</h4>
-        <p class="empty-state-desc">No records found matching your search criteria.</p>
-        <button *ngIf="searchQuery" class="btn btn-secondary btn-sm" (click)="resetSearch()">
-          Clear Filter
+      <!-- Empty State (No records at all in DB) -->
+      <div *ngIf="!loading && semesters.length === 0" class="empty-state">
+        <h4 class="empty-state-title">No records found</h4>
+        <p class="empty-state-desc">There are no semester records saved in the database yet.</p>
+        <a routerLink="/dashboard" class="btn btn-primary btn-sm">
+          Go to Calculator
+        </a>
+      </div>
+
+      <!-- Filter Empty State (Records exist, but filter matched 0) -->
+      <div *ngIf="!loading && semesters.length > 0 && filteredSemesters.length === 0" class="empty-state">
+        <h4 class="empty-state-title">No matching records found</h4>
+        <p class="empty-state-desc">No saved semester matches your current search or classification filter.</p>
+        <button class="btn btn-secondary btn-sm" (click)="resetFilters()">
+          Clear Filters
         </button>
       </div>
 
@@ -144,26 +184,45 @@ import { ConfirmModalComponent } from '../../components/confirm-modal/confirm-mo
       justify-content: space-between;
     }
     .filter-card {
-      padding: 0.85rem 1.25rem;
+      padding: 1rem 1.25rem;
     }
     .filter-controls {
       display: flex;
       flex-direction: column;
       gap: 0.75rem;
     }
-    @media (min-width: 640px) {
+    @media (min-width: 768px) {
       .filter-controls {
         flex-direction: row;
         align-items: center;
         justify-content: space-between;
       }
     }
-    .search-input {
+    .search-box {
       flex: 1;
-      max-width: 440px;
+    }
+    .search-input {
+      width: 100%;
+    }
+    .filter-selects {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+    }
+    .filter-standing-select {
+      width: 165px;
     }
     .sort-select {
-      width: 190px;
+      width: 175px;
+    }
+    .reset-btn {
+      padding: 0.45rem 0.75rem;
+    }
+    .filter-status-bar {
+      margin-top: 0.65rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid var(--border-color);
     }
     .sem-link {
       color: #000000;
@@ -186,7 +245,9 @@ export class HistoryComponent implements OnInit {
   semesters: Semester[] = [];
   filteredSemesters: Semester[] = [];
   loading = true;
+
   searchQuery = '';
+  filterStanding = 'all';
   sortBy = 'sem_asc';
 
   isDeleteModalOpen = false;
@@ -206,7 +267,12 @@ export class HistoryComponent implements OnInit {
     this.loading = true;
     this.semesterService.getAllSemesters().subscribe({
       next: (res) => {
-        this.semesters = res.data || [];
+        this.semesters = (res.data || []).map(s => ({
+          ...s,
+          semester_number: Number(s.semester_number),
+          sgpa: Number(s.sgpa),
+          total_credits: Number(s.total_credits)
+        }));
         this.applyFilters();
         this.loading = false;
         this.changeDetector.detectChanges();
@@ -222,30 +288,71 @@ export class HistoryComponent implements OnInit {
   applyFilters(): void {
     let list = [...this.semesters];
 
-    if (this.searchQuery.trim()) {
+    // 1. Text Search Filter
+    if (this.searchQuery && this.searchQuery.trim()) {
       const q = this.searchQuery.toLowerCase().trim();
-      list = list.filter(s => 
-        s.semester_heading.toLowerCase().includes(q) ||
-        String(s.semester_number).includes(q)
-      );
+      list = list.filter(s => {
+        const headingMatch = (s.semester_heading || '').toLowerCase().includes(q);
+        const numberMatch = String(s.semester_number).includes(q) || `sem ${s.semester_number}`.includes(q) || `semester ${s.semester_number}`.includes(q);
+        const standingMatch = this.getAcademicStanding(s.sgpa).toLowerCase().includes(q);
+        const sgpaMatch = s.sgpa.toFixed(2).includes(q);
+        return headingMatch || numberMatch || standingMatch || sgpaMatch;
+      });
     }
 
+    // 2. Standing / Classification Filter
+    if (this.filterStanding && this.filterStanding !== 'all') {
+      list = list.filter(s => {
+        const val = Number(s.sgpa);
+        switch (this.filterStanding) {
+          case 'distinction': return val >= 8.5;
+          case 'first': return val >= 6.5 && val < 8.5;
+          case 'second': return val >= 5.5 && val < 6.5;
+          case 'pass': return val >= 4.0 && val < 5.5;
+          case 'fail': return val < 4.0;
+          default: return true;
+        }
+      });
+    }
+
+    // 3. Sorting
     list.sort((a, b) => {
+      const semA = Number(a.semester_number) || 0;
+      const semB = Number(b.semester_number) || 0;
+      const sgpaA = Number(a.sgpa) || 0;
+      const sgpaB = Number(b.sgpa) || 0;
+      const credA = Number(a.total_credits) || 0;
+      const credB = Number(b.total_credits) || 0;
+
       switch (this.sortBy) {
-        case 'sem_asc': return a.semester_number - b.semester_number;
-        case 'sem_desc': return b.semester_number - a.semester_number;
-        case 'sgpa_desc': return b.sgpa - a.sgpa;
-        case 'sgpa_asc': return a.sgpa - b.sgpa;
-        case 'credits_desc': return b.total_credits - a.total_credits;
+        case 'sem_asc': return semA - semB;
+        case 'sem_desc': return semB - semA;
+        case 'sgpa_desc': return sgpaB - sgpaA;
+        case 'sgpa_asc': return sgpaA - sgpaB;
+        case 'credits_desc': return credB - credA;
+        case 'credits_asc': return credA - credB;
+        case 'date_desc': {
+          const tA = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const tB = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return tB - tA;
+        }
+        case 'date_asc': {
+          const tA = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const tB = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return tA - tB;
+        }
         default: return 0;
       }
     });
 
     this.filteredSemesters = list;
+    this.changeDetector.detectChanges();
   }
 
-  resetSearch(): void {
+  resetFilters(): void {
     this.searchQuery = '';
+    this.filterStanding = 'all';
+    this.sortBy = 'sem_asc';
     this.applyFilters();
   }
 
@@ -260,10 +367,11 @@ export class HistoryComponent implements OnInit {
   }
 
   getAcademicStanding(gpa: number): string {
-    if (gpa >= 8.5) return 'Distinction';
-    if (gpa >= 6.5) return 'First Class';
-    if (gpa >= 5.5) return 'Second Class';
-    if (gpa >= 4.0) return 'Pass Class';
+    const val = Number(gpa);
+    if (val >= 8.5) return 'Distinction';
+    if (val >= 6.5) return 'First Class';
+    if (val >= 5.5) return 'Second Class';
+    if (val >= 4.0) return 'Pass Class';
     return 'Fail';
   }
 

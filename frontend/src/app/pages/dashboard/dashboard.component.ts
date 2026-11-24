@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, HostListener, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute, Router } from '@angular/router';
-import { FormBuilder, FormGroup, FormArray, Validators, ReactiveFormsModule } from '@angular/forms';
+import { FormBuilder, FormGroup, FormArray, Validators, ReactiveFormsModule, FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import { CgpaService } from '../../services/cgpa.service';
 import { SemesterService } from '../../services/semester.service';
@@ -20,7 +20,7 @@ interface CalculationResult {
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterModule, ReactiveFormsModule, StatCardComponent, ConfirmModalComponent],
+  imports: [CommonModule, RouterModule, ReactiveFormsModule, FormsModule, StatCardComponent, ConfirmModalComponent],
   template: `
     <div class="dashboard-page">
       <!-- Minimalist Header -->
@@ -285,6 +285,45 @@ interface CalculationResult {
           </span>
         </div>
 
+        <!-- Filter Controls when records exist -->
+        <div class="filter-controls-row mb-4" *ngIf="!loading && cgpaSummary && cgpaSummary.semesters && cgpaSummary.semesters.length > 0">
+          <input 
+            type="text" 
+            class="form-input search-input" 
+            placeholder="Search saved records by heading, number, or grade..." 
+            [(ngModel)]="historySearchQuery"
+            (ngModelChange)="applyHistoryFilters()"
+          />
+          <div class="filter-selects-group">
+            <select class="form-select filter-select" [(ngModel)]="historyFilterStanding" (ngModelChange)="applyHistoryFilters()">
+              <option value="all">All Classifications</option>
+              <option value="distinction">Distinction (&ge; 8.5)</option>
+              <option value="first">First Class (&ge; 6.5)</option>
+              <option value="second">Second Class (&ge; 5.5)</option>
+              <option value="pass">Pass Class (&ge; 4.0)</option>
+              <option value="fail">Fail (&lt; 4.0)</option>
+            </select>
+            <select class="form-select filter-select" [(ngModel)]="historySortBy" (ngModelChange)="applyHistoryFilters()">
+              <option value="sem_asc">Semester (1 &rarr; N)</option>
+              <option value="sem_desc">Semester (N &rarr; 1)</option>
+              <option value="sgpa_desc">Highest SGPA</option>
+              <option value="sgpa_asc">Lowest SGPA</option>
+              <option value="credits_desc">Most Credits</option>
+              <option value="credits_asc">Least Credits</option>
+              <option value="date_desc">Newest First</option>
+              <option value="date_asc">Oldest First</option>
+            </select>
+            <button 
+              *ngIf="historySearchQuery || historyFilterStanding !== 'all' || historySortBy !== 'sem_asc'"
+              type="button" 
+              class="btn btn-outline btn-sm" 
+              (click)="resetHistoryFilters()"
+            >
+              Reset
+            </button>
+          </div>
+        </div>
+
         <!-- Loading State -->
         <div *ngIf="loading" class="loading-box">
           <div class="spinner spinner-primary"></div>
@@ -306,8 +345,15 @@ interface CalculationResult {
           </p>
         </div>
 
+        <!-- Filter Empty State (Records exist, but filter matched 0) -->
+        <div *ngIf="!loading && cgpaSummary && cgpaSummary.semesters && cgpaSummary.semesters.length > 0 && filteredHistorySemesters.length === 0" class="empty-state">
+          <h4 class="empty-state-title">No matching records found</h4>
+          <p class="empty-state-desc">No saved semester matches your current search query or filter.</p>
+          <button type="button" class="btn btn-secondary btn-sm" (click)="resetHistoryFilters()">Clear Filter</button>
+        </div>
+
         <!-- Semesters Table -->
-        <div *ngIf="!loading && cgpaSummary && cgpaSummary.semesters && cgpaSummary.semesters.length > 0" class="table-container">
+        <div *ngIf="!loading && filteredHistorySemesters.length > 0" class="table-container">
           <table class="data-table">
             <thead>
               <tr>
@@ -322,7 +368,7 @@ interface CalculationResult {
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let sem of cgpaSummary.semesters">
+              <tr *ngFor="let sem of filteredHistorySemesters">
                 <td>
                   <span class="font-mono font-bold">#{{ sem.semester_number }}</span>
                 </td>
@@ -586,12 +632,39 @@ interface CalculationResult {
       color: #737373;
       margin-bottom: 0.5rem;
     }
+    .filter-controls-row {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    @media (min-width: 768px) {
+      .filter-controls-row {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+      }
+    }
+    .filter-selects-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+    }
+    .filter-select {
+      width: 170px;
+    }
   `]
 })
 export class DashboardComponent implements OnInit, OnDestroy {
   cgpaSummary: CgpaSummary | null = null;
   loading = true;
   loadError: string | null = null;
+
+  // History Filter state
+  historySearchQuery = '';
+  historyFilterStanding = 'all';
+  historySortBy = 'sem_asc';
+  filteredHistorySemesters: SemesterOverviewItem[] = [];
 
   // Calculator Form
   calcForm!: FormGroup;
@@ -795,6 +868,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
             semester_heading: `Semester ${next}`
           });
         }
+        this.applyHistoryFilters();
         this.changeDetector.detectChanges();
       },
       error: (err) => {
@@ -804,6 +878,79 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.changeDetector.detectChanges();
       }
     });
+  }
+
+  applyHistoryFilters(): void {
+    let list = [...(this.cgpaSummary?.semesters || [])].map(s => ({
+      ...s,
+      semester_number: Number(s.semester_number),
+      sgpa: Number(s.sgpa),
+      total_credits: Number(s.total_credits)
+    }));
+
+    if (this.historySearchQuery && this.historySearchQuery.trim()) {
+      const q = this.historySearchQuery.toLowerCase().trim();
+      list = list.filter(s => {
+        const headingMatch = (s.semester_heading || '').toLowerCase().includes(q);
+        const numberMatch = String(s.semester_number).includes(q) || `sem ${s.semester_number}`.includes(q) || `semester ${s.semester_number}`.includes(q);
+        const standingMatch = this.getAcademicStanding(s.sgpa).toLowerCase().includes(q);
+        const sgpaMatch = s.sgpa.toFixed(2).includes(q);
+        return headingMatch || numberMatch || standingMatch || sgpaMatch;
+      });
+    }
+
+    if (this.historyFilterStanding && this.historyFilterStanding !== 'all') {
+      list = list.filter(s => {
+        const val = Number(s.sgpa);
+        switch (this.historyFilterStanding) {
+          case 'distinction': return val >= 8.5;
+          case 'first': return val >= 6.5 && val < 8.5;
+          case 'second': return val >= 5.5 && val < 6.5;
+          case 'pass': return val >= 4.0 && val < 5.5;
+          case 'fail': return val < 4.0;
+          default: return true;
+        }
+      });
+    }
+
+    list.sort((a, b) => {
+      const semA = Number(a.semester_number) || 0;
+      const semB = Number(b.semester_number) || 0;
+      const sgpaA = Number(a.sgpa) || 0;
+      const sgpaB = Number(b.sgpa) || 0;
+      const credA = Number(a.total_credits) || 0;
+      const credB = Number(b.total_credits) || 0;
+
+      switch (this.historySortBy) {
+        case 'sem_asc': return semA - semB;
+        case 'sem_desc': return semB - semA;
+        case 'sgpa_desc': return sgpaB - sgpaA;
+        case 'sgpa_asc': return sgpaA - sgpaB;
+        case 'credits_desc': return credB - credA;
+        case 'credits_asc': return credA - credB;
+        case 'date_desc': {
+          const tA = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const tB = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return tB - tA;
+        }
+        case 'date_asc': {
+          const tA = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const tB = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return tA - tB;
+        }
+        default: return 0;
+      }
+    });
+
+    this.filteredHistorySemesters = list;
+    this.changeDetector.detectChanges();
+  }
+
+  resetHistoryFilters(): void {
+    this.historySearchQuery = '';
+    this.historyFilterStanding = 'all';
+    this.historySortBy = 'sem_asc';
+    this.applyHistoryFilters();
   }
 
   editSemesterInCalculator(id: number): void {
